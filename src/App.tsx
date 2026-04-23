@@ -8,7 +8,7 @@ function App() {
   return (
     <PlayerProvider>
       <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-2xl border border-purple-500/30 bg-slate-900/80 p-6 shadow-[0_0_40px_rgba(168,85,247,0.2)]">
+        <div className="mx-auto flex w-full min-h-screen flex-col gap-6 rounded-2xl p-6">
           <header className="space-y-2">
             <p className="text-xs uppercase tracking-[0.28em] text-purple-300">
               Tunafy MVP
