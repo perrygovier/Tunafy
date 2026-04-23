@@ -1,50 +1,34 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { PlayerProvider } from "./app/providers/PlayerProvider";
+import { FileLoader } from "./features/player/components/FileLoader";
+import { PlayerControls } from "./features/player/components/PlayerControls";
+import { ProgressBar } from "./features/player/components/ProgressBar";
+import { TrackInfo } from "./features/player/components/TrackInfo";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <PlayerProvider>
+      <main className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-2xl border border-purple-500/30 bg-slate-900/80 p-6 shadow-[0_0_40px_rgba(168,85,247,0.2)]">
+          <header className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.28em] text-purple-300">
+              Tunafy MVP
+            </p>
+            <h1 className="text-3xl font-semibold text-white">
+              Local MP3 Player
+            </h1>
+            <p className="text-sm text-slate-400">
+              Load a single track, then play, pause, and seek with synchronized
+              playback events.
+            </p>
+          </header>
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+          <FileLoader />
+          <TrackInfo />
+          <ProgressBar />
+          <PlayerControls />
+        </div>
+      </main>
+    </PlayerProvider>
   );
 }
 
