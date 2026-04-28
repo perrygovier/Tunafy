@@ -4,6 +4,7 @@ export type Track = {
   src: string;
   duration?: number;
   artist?: string;
+  imgUrl?: string;
 };
 
 export type PlayerState = {
