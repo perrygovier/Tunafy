@@ -1,3 +1,4 @@
+import { parseBlob } from 'music-metadata';
 import { PLAYER_EVENTS, type PlaybackTimePayload } from "./audioEvents";
 import type { Track } from "../../features/player/types";
 
@@ -37,6 +38,22 @@ export class AudioController {
       src,
       duration,
     };
+
+    try {
+      const metadata = await parseBlob(file);
+      const picture = metadata.common.picture;
+
+      if (picture) {
+        const base64 = Array.from(new Uint8Array(picture[0].data))
+          .map(byte => String.fromCharCode(byte))
+          .join("");
+        const imageUrl = `data:${picture[0].format};base64,${btoa(base64)}`;
+        track.imgUrl = imageUrl;
+       }
+
+    } catch(e) {
+      console.error('Error parsing metadata:', e);
+    }
 
     this.emit(PLAYER_EVENTS.TRACK_LOADED, track);
     this.emitTimeUpdate(false);
