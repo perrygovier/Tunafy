@@ -7,7 +7,11 @@ export type Track = {
   imgUrl?: string;
 };
 
+export type RepeatMode = "off" | "all" | "one";
+
 export type PlayerState = {
+  queue: Track[];
+  currentIndex: number;
   currentTrack: Track | null;
   isPlaying: boolean;
   currentTime: number;
@@ -16,4 +20,6 @@ export type PlayerState = {
   volume: number;
   isLoadingTrack: boolean;
   error: string | null;
+  repeatMode: RepeatMode;
+  shuffle: boolean;
 };

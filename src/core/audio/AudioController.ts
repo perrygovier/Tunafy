@@ -1,4 +1,3 @@
-import { parseBlob } from 'music-metadata';
 import { PLAYER_EVENTS, type PlaybackTimePayload } from "./audioEvents";
 import type { Track } from "../../features/player/types";
 
@@ -7,7 +6,6 @@ const TIME_UPDATE_INTERVAL_MS = 125;
 export class AudioController {
   private audio = new Audio();
   private eventTarget = new EventTarget();
-  private activeObjectUrl: string | null = null;
   private ticker: number | null = null;
 
   constructor() {
@@ -17,48 +15,24 @@ export class AudioController {
     this.audio.addEventListener("error", this.handleError);
   }
 
-  async loadTrack(file: File): Promise<Track> {
+  async loadTrack(track: Track): Promise<Track> {
     this.stopTicker();
     this.audio.pause();
 
-    if (this.activeObjectUrl) {
-      URL.revokeObjectURL(this.activeObjectUrl);
-    }
-
-    const src = URL.createObjectURL(file);
-    this.activeObjectUrl = src;
-    this.audio.src = src;
+    this.audio.src = track.src;
     this.audio.currentTime = 0;
 
-    const duration = await this.waitForMetadata();
+    const audioDuration = await this.waitForMetadata();
 
-    const track: Track = {
-      id: crypto.randomUUID(),
-      title: this.getTitleFromFile(file),
-      src,
-      duration,
+    const resolved: Track = {
+      ...track,
+      duration: track.duration ?? audioDuration,
     };
 
-    try {
-      const metadata = await parseBlob(file);
-      const picture = metadata.common.picture;
-
-      if (picture) {
-        const base64 = Array.from(new Uint8Array(picture[0].data))
-          .map(byte => String.fromCharCode(byte))
-          .join("");
-        const imageUrl = `data:${picture[0].format};base64,${btoa(base64)}`;
-        track.imgUrl = imageUrl;
-       }
-
-    } catch(e) {
-      console.error('Error parsing metadata:', e);
-    }
-
-    this.emit(PLAYER_EVENTS.TRACK_LOADED, track);
+    this.emit(PLAYER_EVENTS.TRACK_LOADED, resolved);
     this.emitTimeUpdate(false);
 
-    return track;
+    return resolved;
   }
 
   async play() {
@@ -108,11 +82,6 @@ export class AudioController {
     this.audio.removeEventListener("ended", this.handleEnded);
     this.audio.removeEventListener("seeked", this.handleSeeked);
     this.audio.removeEventListener("error", this.handleError);
-
-    if (this.activeObjectUrl) {
-      URL.revokeObjectURL(this.activeObjectUrl);
-      this.activeObjectUrl = null;
-    }
   }
 
   private handleEnded = () => {
@@ -194,10 +163,6 @@ export class AudioController {
 
   private emit<T>(eventName: string, payload: T) {
     this.eventTarget.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
-  }
-
-  private getTitleFromFile(file: File) {
-    return file.name.replace(/\.[^/.]+$/, "");
   }
 
   private errorMessage(error: unknown) {
