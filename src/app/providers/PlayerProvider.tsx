@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { AudioController } from "../../core/audio/AudioController";
@@ -14,6 +15,7 @@ import {
   type PlaybackTimePayload,
 } from "../../core/audio/audioEvents";
 import { createTrackFromFile } from "../../core/audio/createTrackFromFile";
+import { trackDB } from "../../core/storage/indexedDB";
 import type {
   PlayerState,
   RepeatMode,
@@ -44,6 +46,7 @@ type PlayerAction =
   | { type: "TIME_UPDATE"; payload: PlaybackTimePayload }
   | { type: "SET_PLAYING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_MESSAGE"; payload: string | null }
   | { type: "TOGGLE_SHUFFLE" }
   | { type: "CYCLE_REPEAT" };
 
@@ -58,6 +61,7 @@ const initialState: PlayerState = {
   volume: 1,
   isLoadingTrack: false,
   error: null,
+  message: null,
   repeatMode: "off",
   shuffle: false,
 };
@@ -73,8 +77,16 @@ function reducer(state: PlayerState, action: PlayerAction): PlayerState {
     case "SET_LOADING":
       return { ...state, isLoadingTrack: action.payload };
 
-    case "ADD_TRACKS":
-      return { ...state, queue: [...state.queue, ...action.payload] };
+    case "ADD_TRACKS": {
+      const existingIds = new Set(state.queue.map((track) => track.id));
+      return {
+        ...state,
+        queue: [
+          ...state.queue,
+          ...action.payload.filter((track) => !existingIds.has(track.id)),
+        ],
+      };
+    }
 
     case "REMOVE_TRACK": {
       const removeIndex = state.queue.findIndex((t) => t.id === action.payload);
@@ -150,8 +162,15 @@ function reducer(state: PlayerState, action: PlayerAction): PlayerState {
       return {
         ...state,
         error: action.payload,
+        message: null,
         isPlaying: false,
         isLoadingTrack: false,
+      };
+
+    case "SET_MESSAGE":
+      return {
+        ...state,
+        message: action.payload,
       };
 
     case "TOGGLE_SHUFFLE":
@@ -170,6 +189,7 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const controller = useMemo(() => new AudioController(), []);
+  const [loaded, setLoaded] = useState(false);
 
   // Keep a live ref to state so stable callbacks (and event handlers) can read it
   // without becoming sources of re-subscriptions.
@@ -303,6 +323,70 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, [controller]);
 
+  // Load persisted tracks on mount
+  useEffect(() => {
+    const loadPersistedTracks = async () => {
+      try {
+        const storedTracks = await trackDB.getAll();
+        const tracks: Track[] = storedTracks.map((stored) => ({
+          ...stored.metadata,
+          src: URL.createObjectURL(stored.file),
+        }));
+
+        // Load playlist order from localStorage
+        const storedQueue = localStorage.getItem('tunafy-queue');
+        if (storedQueue === null) {
+          // First time, add all tracks.
+          dispatch({ type: "ADD_TRACKS", payload: tracks });
+        } else {
+          try {
+            const queueHashes: string[] = JSON.parse(storedQueue);
+            if (queueHashes.length > 0) {
+              const orderedTracks = queueHashes
+                .map((hash) => tracks.find((t) => t.id === hash))
+                .filter(Boolean) as Track[];
+              if (orderedTracks.length > 0) {
+                dispatch({ type: "ADD_TRACKS", payload: orderedTracks });
+              } else {
+                // If the saved order doesn't match any stored IDs, restore all tracks.
+                dispatch({ type: "ADD_TRACKS", payload: tracks });
+              }
+            }
+            // If length == 0, keep empty (user cleared)
+          } catch {
+            // Invalid JSON, add all
+            dispatch({ type: "ADD_TRACKS", payload: tracks });
+          }
+        }
+        setLoaded(true);
+      } catch (error) {
+        console.error('Failed to load persisted tracks:', error);
+      }
+    };
+
+    loadPersistedTracks();
+  }, []);
+
+  // Save queue order on changes
+  useEffect(() => {
+    if (loaded) {
+      const queueHashes = state.queue.map((track) => track.id);
+      localStorage.setItem('tunafy-queue', JSON.stringify(queueHashes));
+    }
+  }, [state.queue, loaded]);
+
+  useEffect(() => {
+    if (!state.message) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      dispatch({ type: "SET_MESSAGE", payload: null });
+    }, 4000);
+
+    return () => window.clearTimeout(timeout);
+  }, [state.message]);
+
   // Tear down the controller and revoke any blob URLs we still own when the provider
   // unmounts. Kept in its own effect so transient dep changes don't destroy the audio.
   useEffect(() => {
@@ -325,17 +409,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const wasEmpty = stateRef.current.queue.length === 0;
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_ERROR", payload: null });
+      dispatch({ type: "SET_MESSAGE", payload: null });
 
       try {
         const tracks = await Promise.all(files.map((file) => createTrackFromFile(file)));
-        dispatch({ type: "ADD_TRACKS", payload: tracks });
+        const existingIds = new Set(stateRef.current.queue.map((t) => t.id));
+        const newTracks = tracks.filter((track) => !existingIds.has(track.id));
+        const duplicateCount = tracks.length - newTracks.length;
 
-        if (wasEmpty) {
-          // Auto-load (but don't auto-play) the first added track so the user sees
-          // it queued up in the player UI.
-          const firstIndex = 0;
-          dispatch({ type: "SET_INDEX", payload: firstIndex });
-          await controller.loadTrack(tracks[firstIndex]);
+        if (duplicateCount > 0) {
+          const note =
+            duplicateCount === 1
+              ? "One duplicate track was skipped."
+              : `${duplicateCount} duplicate tracks were skipped.`;
+          dispatch({ type: "SET_MESSAGE", payload: note });
+        }
+
+        if (newTracks.length > 0) {
+          dispatch({ type: "ADD_TRACKS", payload: newTracks });
+
+          if (wasEmpty) {
+            // Auto-load (but don't auto-play) the first added track so the user sees
+            // it queued up in the player UI.
+            const firstIndex = 0;
+            dispatch({ type: "SET_INDEX", payload: firstIndex });
+            await controller.loadTrack(newTracks[firstIndex]);
+          }
         }
       } catch {
         dispatch({
@@ -406,6 +505,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
     });
     dispatch({ type: "CLEAR_QUEUE" });
+    trackDB.clear();
+    localStorage.removeItem('tunafy-queue');
   }, [controller]);
 
   const toggleShuffle = useCallback(() => {
