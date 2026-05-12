@@ -23,3 +23,28 @@ body {
     rgba(2, 6, 23, 1) 40%
   );
 }
+
+/*
+ * Playlist reorder animation
+ *
+ * Each playlist <li> sets its own `view-transition-name` to "track-<id>", so
+ * these selectors target every reorderable row. The default behavior of the
+ * View Transitions API cross-fades the old and new snapshots while morphing
+ * position; for a row that is the same element in both states we only want
+ * the positional morph (no fade), which looks cleaner.
+ */
+::view-transition-group(*) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) {
+    animation-duration: 0ms;
+  }
+}

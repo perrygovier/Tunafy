@@ -29,6 +29,7 @@ type PlayerContextValue = {
   next: () => Promise<void>;
   prev: () => Promise<void>;
   removeTrack: (id: string) => void;
+  reorderTracks: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
@@ -38,6 +39,7 @@ type PlayerAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "ADD_TRACKS"; payload: Track[] }
   | { type: "REMOVE_TRACK"; payload: string }
+  | { type: "REORDER"; payload: { fromIndex: number; toIndex: number } }
   | { type: "CLEAR_QUEUE" }
   | { type: "SET_INDEX"; payload: number }
   | { type: "TRACK_LOADED"; payload: Track }
@@ -99,6 +101,40 @@ function reducer(state: PlayerState, action: PlayerAction): PlayerState {
         queue: nextQueue,
         currentIndex: nextIndex,
         currentTrack: nextTrack,
+      };
+    }
+
+    case "REORDER": {
+      const { fromIndex, toIndex } = action.payload;
+      const len = state.queue.length;
+
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        fromIndex >= len ||
+        toIndex < 0 ||
+        toIndex >= len
+      ) {
+        return state;
+      }
+
+      // Track the playing song by id so we can keep currentIndex pointing at it
+      // regardless of where it lands in the new order.
+      const playingId =
+        state.currentIndex >= 0 ? state.queue[state.currentIndex]?.id : null;
+
+      const queue = state.queue.slice();
+      const [moved] = queue.splice(fromIndex, 1);
+      queue.splice(toIndex, 0, moved);
+
+      const nextIndex = playingId
+        ? queue.findIndex((t) => t.id === playingId)
+        : state.currentIndex;
+
+      return {
+        ...state,
+        queue,
+        currentIndex: nextIndex,
       };
     }
 
@@ -398,6 +434,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [controller],
   );
 
+  const reorderTracks = useCallback((fromIndex: number, toIndex: number) => {
+    dispatch({ type: "REORDER", payload: { fromIndex, toIndex } });
+  }, []);
+
   const clearQueue = useCallback(() => {
     controller.pause();
     stateRef.current.queue.forEach((track) => {
@@ -426,6 +466,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       next,
       prev,
       removeTrack,
+      reorderTracks,
       clearQueue,
       toggleShuffle,
       cycleRepeat,
@@ -438,6 +479,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       playTrackAt,
       prev,
       removeTrack,
+      reorderTracks,
       seekTo,
       state,
       togglePlayPause,
