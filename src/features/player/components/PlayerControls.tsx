@@ -8,10 +8,13 @@ export function PlayerControls() {
       queue,
       isPlaying,
       isLoadingTrack,
+      currentTime,
+      duration,
       shuffle,
       repeatMode,
     },
     togglePlayPause,
+    seekTo,
     next,
     prev,
     toggleShuffle,
@@ -21,6 +24,7 @@ export function PlayerControls() {
   const hasTracks = queue.length > 0;
   const playDisabled = (!currentTrack && !hasTracks) || isLoadingTrack;
   const navDisabled = !hasTracks || isLoadingTrack;
+  const seekDisabled = !currentTrack || isLoadingTrack || duration <= 0;
 
   const repeatLabel =
     repeatMode === "off"
@@ -28,6 +32,16 @@ export function PlayerControls() {
       : repeatMode === "all"
         ? "Repeat all"
         : "Repeat one";
+
+  const seekBackward = () => {
+    const newTime = Math.max(0, currentTime - 5);
+    seekTo(newTime);
+  };
+
+  const seekForward = () => {
+    const newTime = Math.min(duration, currentTime + 5);
+    seekTo(newTime);
+  };
 
   return (
     <section className="flex flex-wrap items-center gap-3">
@@ -50,11 +64,35 @@ export function PlayerControls() {
 
       <button
         type="button"
+        disabled={seekDisabled}
+        onClick={seekBackward}
+        className="rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-semibold text-purple-500 transition hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+        title="Rewind 5 seconds"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M12 4v8l-4-4 4-4z"/>
+          <path d="M8 4v8l-4-4 4-4z"/>
+        </svg>
+      </button>
+      <button
+        type="button"
         disabled={playDisabled}
         onClick={() => void togglePlayPause()}
         className="rounded-full bg-purple-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
       >
         {isPlaying ? "Pause" : "Play"}
+      </button>
+      <button
+        type="button"
+        disabled={seekDisabled}
+        onClick={seekForward}
+        className="rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-semibold text-purple-500 transition hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+        title="Fast forward 5 seconds"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M4 4v8l4-4-4-4z"/>
+          <path d="M8 4v8l4-4-4-4z"/>
+        </svg>
       </button>
 
       <IconButton
