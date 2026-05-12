@@ -1,5 +1,35 @@
+import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "../hooks/usePlayer";
 import { formatTime } from "../../../shared/utils/formatTime";
+
+const scrollingTitleStyles = `
+  @keyframes scroll-left {
+    0% {
+      transform: translateX(0);
+    }
+    10% {
+      transform: translateX(0);
+    }
+    65% {
+      transform: translateX(calc(-100% + 2rem));
+    }
+    90% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  .scrolling-title {
+    animation: scroll-left 5s ease-in-out infinite;
+    white-space: nowrap;
+  }
+
+  .returning-title {
+    white-space: nowrap;
+  }
+`;
 
 export function Playlist() {
   const {
@@ -8,6 +38,50 @@ export function Playlist() {
     removeTrack,
     clearQueue,
   } = usePlayer();
+
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [returningIndex, setReturningIndex] = useState<number | null>(null);
+  const [returningStyles, setReturningStyles] = useState<Record<number, React.CSSProperties>>({});
+  const titleRefs = useRef<Record<number, HTMLParagraphElement | null>>({});
+  const returnTimerRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (returnTimerRef.current !== null) {
+      window.clearTimeout(returnTimerRef.current);
+      returnTimerRef.current = null;
+    }
+
+    if (returningIndex !== null) {
+      frameRef.current = window.requestAnimationFrame(() => {
+        setReturningStyles((prev) => ({
+          ...prev,
+          [returningIndex]: {
+            ...prev[returningIndex],
+            transform: "translateX(0)",
+          },
+        }));
+      });
+
+      returnTimerRef.current = window.setTimeout(() => {
+        setReturningIndex((current) => (current === returningIndex ? null : current));
+        setReturningStyles((prev) => {
+          const next = { ...prev };
+          delete next[returningIndex];
+          return next;
+        });
+      }, 400);
+    }
+
+    return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+      if (returnTimerRef.current !== null) {
+        window.clearTimeout(returnTimerRef.current);
+      }
+    };
+  }, [returningIndex]);
 
   if (queue.length === 0) {
     return (
@@ -19,6 +93,7 @@ export function Playlist() {
 
   return (
     <section className="rounded-lg border border-slate-700 bg-slate-950/60">
+      <style>{scrollingTitleStyles}</style>
       <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
@@ -31,7 +106,7 @@ export function Playlist() {
         <button
           type="button"
           onClick={clearQueue}
-          className="rounded-md border border-slate-700 px-3 py-1 text-xs text-slate-300 transition hover:border-rose-400 hover:text-rose-200"
+          className="rounded-md border border-slate-700 px-3 py-1 text-xs text-slate-300 transition hover:cursor-pointer hover:border-rose-400 hover:text-rose-200"
         >
           Clear
         </button>
@@ -40,18 +115,68 @@ export function Playlist() {
       <ol className="divide-y divide-slate-800">
         {queue.map((track, index) => {
           const isActive = index === currentIndex;
+          const isHovered = index === hoveredIndex;
+          const isReturning = index === returningIndex;
+          const shouldScroll = isActive || isHovered;
+
+          const handleMouseLeave = () => {
+            setHoveredIndex(null);
+            if (isActive) {
+              return;
+            }
+
+            const titleEl = titleRefs.current[index];
+            if (!titleEl) {
+              setReturningIndex(index);
+              return;
+            }
+
+            const computed = window.getComputedStyle(titleEl);
+            const transform = computed.transform;
+            let translateX = 0;
+
+            if (transform && transform !== "none") {
+              const matrix2d = transform.match(/matrix\(([^)]+)\)/);
+              const matrix3d = transform.match(/matrix3d\(([^)]+)\)/);
+              if (matrix2d && matrix2d[1]) {
+                const parts = matrix2d[1].split(",").map((part) => parseFloat(part.trim()));
+                if (parts.length === 6) {
+                  translateX = parts[4];
+                }
+              } else if (matrix3d && matrix3d[1]) {
+                const parts = matrix3d[1].split(",").map((part) => parseFloat(part.trim()));
+                if (parts.length === 16) {
+                  translateX = parts[12];
+                }
+              }
+            }
+
+            setReturningStyles((prev) => ({
+              ...prev,
+              [index]: {
+                transform: `translateX(${translateX}px)`,
+                transition: "transform 0.35s ease-out",
+                willChange: "transform",
+                whiteSpace: "nowrap",
+              },
+            }));
+            setReturningIndex(index);
+          };
 
           return (
             <li
               key={track.id}
-              className={`flex items-center gap-3 px-4 py-3 transition ${
+              className={`flex items-center gap-3 px-4 py-3 transition hover:cursor-pointer ${
                 isActive ? "bg-purple-500/10" : "hover:bg-slate-900/60"
               }`}
+              onClick={() => void playTrackAt(index)}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={handleMouseLeave}
             >
               <button
                 type="button"
                 onClick={() => void playTrackAt(index)}
-                className="flex flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 rounded-md"
+                className="cursor-pointer flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 rounded-md"
                 aria-label={`Play ${track.title}`}
               >
                 <span
@@ -79,13 +204,25 @@ export function Playlist() {
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-sm ${
-                      isActive ? "font-semibold text-white" : "text-slate-200"
-                    }`}
-                  >
-                    {track.title}
-                  </p>
+                  <div className="overflow-hidden">
+                    <p
+                      ref={(element) => {
+                        titleRefs.current[index] = element;
+                      }}
+                      className={`text-sm ${
+                        isActive ? "font-semibold text-white" : "text-slate-200"
+                      } ${
+                        isReturning
+                          ? "returning-title"
+                          : shouldScroll
+                            ? "scrolling-title"
+                            : "truncate"
+                      }`}
+                      style={returningStyles[index]}
+                    >
+                      {track.title}
+                    </p>
+                  </div>
                   {track.artist ? (
                     <p className="truncate text-xs text-slate-400">
                       {track.artist}
@@ -103,7 +240,7 @@ export function Playlist() {
               <button
                 type="button"
                 onClick={() => removeTrack(track.id)}
-                className="rounded-md p-2 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                className="ml-auto shrink-0 rounded-md border border-rose-500/30 p-2 text-slate-400 transition hover:cursor-pointer hover:border-rose-400 hover:bg-rose-500/20 hover:text-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                 aria-label={`Remove ${track.title} from playlist`}
                 title="Remove from playlist"
               >
@@ -111,7 +248,7 @@ export function Playlist() {
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                   aria-hidden="true"
                 >
                   <path
