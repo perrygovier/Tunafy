@@ -1,13 +1,84 @@
+import { useState, type CSSProperties, type DragEvent } from "react";
+import { flushSync } from "react-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { formatTime } from "../../../shared/utils/formatTime";
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}
+
+// Wraps a state mutation in the View Transitions API so reordering rows
+// animates between their old and new positions. Falls back to a plain
+// synchronous update on browsers that don't support it (and when the user
+// has requested reduced motion).
+function withViewTransition(mutate: () => void) {
+  const supportsTransitions =
+    typeof document !== "undefined" &&
+    typeof document.startViewTransition === "function";
+
+  if (!supportsTransitions || prefersReducedMotion()) {
+    mutate();
+    return;
+  }
+
+  document.startViewTransition(() => {
+    flushSync(mutate);
+  });
+}
 
 export function Playlist() {
   const {
     state: { queue, currentIndex, isPlaying },
     playTrackAt,
     removeTrack,
+    reorderTracks,
     clearQueue,
   } = usePlayer();
+
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const resetDrag = () => {
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragStart =
+    (index: number) => (event: DragEvent<HTMLSpanElement>) => {
+      setDraggingIndex(index);
+      event.dataTransfer.effectAllowed = "move";
+      // Firefox refuses to start a drag without data being set.
+      event.dataTransfer.setData("text/plain", String(index));
+    };
+
+  const handleDragOver =
+    (index: number) => (event: DragEvent<HTMLLIElement>) => {
+      if (draggingIndex === null) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      if (dragOverIndex !== index) {
+        setDragOverIndex(index);
+      }
+    };
+
+  const handleDrop =
+    (index: number) => (event: DragEvent<HTMLLIElement>) => {
+      event.preventDefault();
+
+      if (draggingIndex === null || draggingIndex === index) {
+        resetDrag();
+        return;
+      }
+
+      const fromIdx = draggingIndex;
+      withViewTransition(() => {
+        reorderTracks(fromIdx, index);
+        resetDrag();
+      });
+    };
 
   if (queue.length === 0) {
     return (
@@ -37,17 +108,74 @@ export function Playlist() {
         </button>
       </header>
 
-      <ol className="divide-y divide-slate-800">
+      <ol
+        className="divide-y divide-slate-800"
+        onDragEnd={resetDrag}
+        onDragLeave={(event) => {
+          // Only reset when leaving the list entirely.
+          if (
+            event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
+            return;
+          }
+          setDragOverIndex(null);
+        }}
+      >
         {queue.map((track, index) => {
           const isActive = index === currentIndex;
+          const isDragging = draggingIndex === index;
+          const isDropTarget =
+            draggingIndex !== null &&
+            dragOverIndex === index &&
+            draggingIndex !== index;
+          // Show the drop indicator on the side the dragged item is coming from.
+          const indicatorAbove =
+            isDropTarget && draggingIndex !== null && draggingIndex > index;
+          const indicatorBelow =
+            isDropTarget && draggingIndex !== null && draggingIndex < index;
+
+          // Unique view-transition-name per row so the browser can match each
+          // <li> to its old/new position and morph between them on reorder.
+          const rowStyle: CSSProperties = {
+            viewTransitionName: `track-${track.id}`,
+          };
 
           return (
             <li
               key={track.id}
-              className={`flex items-center gap-3 px-4 py-3 transition ${
+              style={rowStyle}
+              onDragOver={handleDragOver(index)}
+              onDrop={handleDrop(index)}
+              className={`relative flex items-center gap-2 px-2 py-3 transition ${
                 isActive ? "bg-purple-500/10" : "hover:bg-slate-900/60"
-              }`}
+              } ${isDragging ? "opacity-40" : ""}`}
             >
+              {indicatorAbove ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-2 top-0 h-0.5 rounded-full bg-purple-400"
+                />
+              ) : null}
+              {indicatorBelow ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-purple-400"
+                />
+              ) : null}
+
+              <span
+                role="button"
+                tabIndex={0}
+                draggable
+                onDragStart={handleDragStart(index)}
+                onDragEnd={resetDrag}
+                aria-label={`Drag to reorder ${track.title}`}
+                title="Drag to reorder"
+                className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center text-slate-500 transition hover:text-slate-200 active:cursor-grabbing"
+              >
+                <DragHandleIcon />
+              </span>
+
               <button
                 type="button"
                 onClick={() => void playTrackAt(index)}
@@ -129,16 +257,39 @@ export function Playlist() {
   );
 }
 
-function PlayingIndicator() {
-  // Simple three-bar equalizer made out of plain divs + Tailwind animations.
+function DragHandleIcon() {
   return (
-    <span
-      className="flex h-3 items-end gap-0.5"
+    <svg
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="h-4 w-4"
       aria-hidden="true"
     >
-      <span className="block w-0.5 animate-pulse bg-white" style={{ height: "60%" }} />
-      <span className="block w-0.5 animate-pulse bg-white" style={{ height: "100%", animationDelay: "120ms" }} />
-      <span className="block w-0.5 animate-pulse bg-white" style={{ height: "40%", animationDelay: "240ms" }} />
+      <circle cx="6" cy="4" r="1.2" />
+      <circle cx="10" cy="4" r="1.2" />
+      <circle cx="6" cy="8" r="1.2" />
+      <circle cx="10" cy="8" r="1.2" />
+      <circle cx="6" cy="12" r="1.2" />
+      <circle cx="10" cy="12" r="1.2" />
+    </svg>
+  );
+}
+
+function PlayingIndicator() {
+  return (
+    <span className="flex h-3 items-end gap-0.5" aria-hidden="true">
+      <span
+        className="block w-0.5 animate-pulse bg-white"
+        style={{ height: "60%" }}
+      />
+      <span
+        className="block w-0.5 animate-pulse bg-white"
+        style={{ height: "100%", animationDelay: "120ms" }}
+      />
+      <span
+        className="block w-0.5 animate-pulse bg-white"
+        style={{ height: "40%", animationDelay: "240ms" }}
+      />
     </span>
   );
 }
