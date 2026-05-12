@@ -44,7 +44,7 @@ export function PlayerControls() {
   };
 
   return (
-    <section className="flex flex-wrap items-center gap-3">
+    <section className="flex flex-wrap justify-center gap-2">
       <IconButton
         label="Shuffle"
         onClick={toggleShuffle}
@@ -62,38 +62,37 @@ export function PlayerControls() {
         <PrevIcon />
       </IconButton>
 
-      <button
-        type="button"
-        disabled={seekDisabled}
+      <IconButton
+        label="Rewind 5 seconds"
         onClick={seekBackward}
-        className="rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-semibold text-purple-500 transition hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
-        title="Rewind 5 seconds"
+        disabled={seekDisabled}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M12 4v8l-4-4 4-4z"/>
           <path d="M8 4v8l-4-4 4-4z"/>
         </svg>
-      </button>
+      </IconButton>
+
       <button
         type="button"
         disabled={playDisabled}
         onClick={() => void togglePlayPause()}
-        className="rounded-full bg-purple-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+        aria-label={isPlaying ? "Pause" : "Play"}
+        className="flex cursor-pointer items-center justify-center rounded-lg bg-purple-500 px-4 py-2.5 text-white transition hover:bg-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
       >
-        {isPlaying ? "Pause" : "Play"}
+        {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
-      <button
-        type="button"
-        disabled={seekDisabled}
+
+      <IconButton
+        label="Fast forward 5 seconds"
         onClick={seekForward}
-        className="rounded-lg bg-slate-700 px-5 py-2.5 text-sm font-semibold text-purple-500 transition hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
-        title="Fast forward 5 seconds"
+        disabled={seekDisabled}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M4 4v8l4-4-4-4z"/>
           <path d="M8 4v8l4-4-4-4z"/>
         </svg>
-      </button>
+      </IconButton>
 
       <IconButton
         label="Next track"
@@ -111,13 +110,6 @@ export function PlayerControls() {
       >
         {repeatMode === "one" ? <RepeatOneIcon /> : <RepeatAllIcon />}
       </IconButton>
-
-      <p className="ml-auto text-sm text-slate-400">
-        Status:{" "}
-        <span className="font-medium text-slate-200">
-          {isPlaying ? "Playing" : "Paused"}
-        </span>
-      </p>
     </section>
   );
 }
@@ -144,11 +136,11 @@ function IconButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`flex h-10 w-10 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`flex cursor-pointer items-center justify-center rounded-lg px-3 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed ${
         active
-          ? "border-purple-400 bg-purple-500/20 text-purple-200"
-          : "border-slate-700 bg-slate-900 text-slate-200 hover:border-purple-400 hover:text-white"
-      }`}
+          ? "bg-purple-500/30 text-purple-300 hover:bg-purple-500/40"
+          : "bg-slate-700 text-purple-400 hover:bg-slate-600 hover:text-purple-300"
+      } disabled:bg-slate-800 disabled:text-slate-500`}
     >
       {children}
     </button>
@@ -204,6 +196,22 @@ function RepeatOneIcon() {
       <text x="11" y="15" fontSize="8" fill="currentColor" stroke="none" fontWeight="bold">
         1
       </text>
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
+      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
     </svg>
   );
 }
