@@ -5,20 +5,20 @@ export function FileLoader() {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const {
-    state: { currentTrack, isLoadingTrack },
-    loadFile,
+    state: { currentTrack, isLoadingTrack, message },
+    addFiles,
   } = usePlayer();
 
-  const buttonText = currentTrack ? "Load a new MP3" : "Load an MP3";
+  const buttonText = currentTrack ? "Add more MP3s" : "Add MP3s to your playlist";
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = event.target.files;
 
-    if (!file) {
+    if (!files || files.length === 0) {
       return;
     }
 
-    await loadFile(file);
+    await addFiles(Array.from(files));
     event.target.value = "";
   };
 
@@ -29,13 +29,14 @@ export function FileLoader() {
   return (
     <section className="space-y-3">
       <label htmlFor={inputId} className="sr-only">
-        Choose an MP3 file to load
+        Choose MP3 files to add to your playlist
       </label>
       <input
         id={inputId}
         ref={inputRef}
         type="file"
         accept=".mp3,audio/mpeg"
+        multiple
         onChange={onFileChange}
         tabIndex={-1}
         className="sr-only"
@@ -48,8 +49,15 @@ export function FileLoader() {
         {buttonText}
       </button>
       {isLoadingTrack ? (
-        <p className="text-xs text-purple-300">Loading selected track...</p>
-      ) : null}
+        <p className="text-xs text-purple-300">Reading metadata...</p>
+      ) : message ? (
+        <p className="text-xs text-amber-300">{message}</p>
+      ) : (
+        <p className="text-xs text-slate-500">
+          Tip: Hold Cmd/Ctrl or Shift in the file picker to select multiple
+          tracks at once.
+        </p>
+      )}
     </section>
   );
 }
