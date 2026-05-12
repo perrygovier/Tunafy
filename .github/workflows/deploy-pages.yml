@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment, but don't cancel in-progress runs so a
+# deploy that's already publishing finishes cleanly.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Served at the root of tunafy.madisoncollege.dev, so the default
+      # Vite base of `/` is correct for both Pages and Tauri.
+      - name: Build
+        run: npm run build
+
+      # Tell GitHub Pages which custom domain owns this deployment. Written
+      # after the build so Vite doesn't wipe it when emptying `dist/`.
+      - name: Write CNAME
+        run: echo 'tunafy.madisoncollege.dev' > dist/CNAME
+
+      # Prevent GitHub Pages from running the published artifact through
+      # Jekyll, which would strip files/directories beginning with `_`.
+      - name: Disable Jekyll processing
+        run: touch dist/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
