@@ -20,6 +20,7 @@ export type PlayerState = {
   volume: number;
   isLoadingTrack: boolean;
   error: string | null;
+  message: string | null;
   repeatMode: RepeatMode;
   shuffle: boolean;
 };

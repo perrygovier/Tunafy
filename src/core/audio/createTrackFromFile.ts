@@ -1,7 +1,24 @@
 import { parseBlob } from "music-metadata";
+import { trackDB } from "../storage/indexedDB";
 import type { Track } from "../../features/player/types";
 
+async function computeHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(hashBuffer)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export async function createTrackFromFile(file: File): Promise<Track> {
+  const hash = await computeHash(file);
+  const existing = await trackDB.get(hash);
+  if (existing) {
+    // Duplicate found, return existing track with new src
+    const src = URL.createObjectURL(existing.file);
+    return { ...existing.metadata, src };
+  }
+
   const src = URL.createObjectURL(file);
 
   let title = stripExtension(file.name);
@@ -26,7 +43,7 @@ export async function createTrackFromFile(file: File): Promise<Track> {
     console.error("Error parsing metadata for", file.name, error);
   }
 
-  return {
+  const track: Track = {
     id: crypto.randomUUID(),
     title,
     src,
@@ -34,6 +51,15 @@ export async function createTrackFromFile(file: File): Promise<Track> {
     duration,
     imgUrl,
   };
+
+  // Store in IndexedDB
+  await trackDB.put({
+    hash,
+    file: new Blob([file]),
+    metadata: { ...track, src: undefined } as Omit<Track, 'src'>,
+  });
+
+  return track;
 }
 
 function stripExtension(filename: string) {

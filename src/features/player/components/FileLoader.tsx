@@ -5,7 +5,7 @@ export function FileLoader() {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const {
-    state: { currentTrack, isLoadingTrack },
+    state: { currentTrack, isLoadingTrack, message },
     addFiles,
   } = usePlayer();
 
@@ -50,6 +50,8 @@ export function FileLoader() {
       </button>
       {isLoadingTrack ? (
         <p className="text-xs text-purple-300">Reading metadata...</p>
+      ) : message ? (
+        <p className="text-xs text-amber-300">{message}</p>
       ) : (
         <p className="text-xs text-slate-500">
           Tip: Hold Cmd/Ctrl or Shift in the file picker to select multiple
